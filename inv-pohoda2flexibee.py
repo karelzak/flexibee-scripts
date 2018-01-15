@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, os, string, time, zlib, types
+import sys, os, string, time, types
 from lxml import etree
 
 vat = { 
@@ -19,6 +19,9 @@ namespaces = {
 class readerPohoda:
     def __init__(self):
         self.map = {
+                "inv-type"      : ".//inv:invoiceType/text()",
+                "code"          : ".//typ:numberRequested/text()",
+
                 "sym-var"       : ".//inv:symVar/text()",            # variabilni symbol
 
                 "date"          : ".//inv:date/text()",              # datum
@@ -86,39 +89,14 @@ class readerPohoda:
 
 
 class writerFlexiBee:
-    def __init__(self, useAddressBook=False, ignoreZeroPrice=True):
+    def __init__(self, ignoreZeroPrice=True):
         self.map = {}
         self.last_addr_id = ''
-        self.useAddressBook = useAddressBook
         self.ignoreZeroPrice = ignoreZeroPrice
 
     def appendTextItem(self, parent, name, itemname, inv):
         if inv.has_key(itemname):
             etree.SubElement(parent, name).text = inv[itemname]
-
-
-    def makeAddrHash(self, inv):
-        res = b''
-        for x in ["addr-name", "addr-street", "addr-city", "addr-zip"]:
-            if inv.has_key(x):
-                res += inv[x].encode('ascii', 'replace')
-        return (zlib.crc32(res) & 0xffffffff)
-
-    def generateAddressBook(self, doc, inv):
-        addr = etree.SubElement(doc, "adresar", update="ignore")
-
-        code = self.makeAddrHash(inv)
-
-        etree.SubElement(addr, "kod").text = unicode(code)
-        self.last_addr_id = "ph:%s" % code
-        etree.SubElement(addr, "id").text = self.last_addr_id
-
-        self.appendTextItem(addr, "nazev", "addr-name", inv)
-        self.appendTextItem(addr, "ulice", "addr-street", inv)
-        self.appendTextItem(addr, "mesto", "addr-city", inv)
-        self.appendTextItem(addr, "psc", "addr-zip", inv)
-        self.appendTextItem(addr, "ic", "ico", inv)
-        self.appendTextItem(addr, "dic", "dic", inv)
 
     def generateAddress(self, parent, inv):
         self.appendTextItem(parent, "nazFirmy", "addr-name", inv)
@@ -130,6 +108,11 @@ class writerFlexiBee:
 
     def vatToSymbol(self, inv, name):
         return vat[inv[name]]
+
+    def isDobropis(self, inv):
+        if inv.has_key("inv-type") and inv["inv-type"] == "issuedCorrectiveTax":
+            return True
+        return False
 
     def generateInvDataItems(self, parent, inv):
         polRoot = etree.SubElement(parent, "polozkyFaktury")
@@ -153,6 +136,15 @@ class writerFlexiBee:
     def generateInvData(self, doc, inv):
         fak = etree.SubElement(doc, "faktura-vydana")
 
+        code = inv["code"]
+
+        if self.isDobropis(inv):
+            etree.SubElement(fak, "id").text = "code:DOB%s" % code
+            dob = etree.SubElement(fak, "vytvor-vazbu-dobropis")
+            etree.SubElement(dob, "dobropisovanyDokl").text = "code:FAK%s" % code
+        else:
+            etree.SubElement(fak, "id").text = "code:FAK%s" % code
+
         if len(self.last_addr_id):
             etree.SubElement(fak, "firma").text = self.last_addr_id
         etree.SubElement(fak, "typDokl").text = "code:FAKTURA"
@@ -166,9 +158,9 @@ class writerFlexiBee:
         self.generateAddress(fak, inv)
         self.generateInvDataItems(fak, inv)
 
+
+
     def writeXML(self, root):
-        if self.useAddressBook:
-            self.generateAddressBook(root, inv)
         self.generateInvData(root, inv)
 
 
@@ -269,8 +261,7 @@ if __name__ == "__main__":
 
     for p in pohoda:
         inv = Invoice(readerPohoda(),
-                      writerFlexiBee(ignoreZeroPrice=True,
-                                 useAddressBook=False))
+                      writerFlexiBee(ignoreZeroPrice=True))
         inv.readFromXML(p)
         inv.writeToXML(bee)
         del inv
