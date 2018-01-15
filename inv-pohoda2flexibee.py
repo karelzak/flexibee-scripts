@@ -4,53 +4,52 @@ import sys, os, string, time, zlib, types
 from lxml import etree
 
 vat = { 
-        "high" : "21",
-        "low"  : "15"
+        "high" : "typSzbDph.dphZakl",
+        "low"  : "typSzbDph.dphSniz"
 }
+
+namespaces = {
+        'dat' : 'http://www.stormware.cz/schema/version_2/data.xsd',
+        'inv' : 'http://www.stormware.cz/schema/version_2/invoice.xsd',
+        'typ' : 'http://www.stormware.cz/schema/version_2/type.xsd'
+} 
+
+
 
 class readerPohoda:
     def __init__(self):
-        self.ns = {
-            'dat' : 'http://www.stormware.cz/schema/version_2/data.xsd',
-            'inv' : 'http://www.stormware.cz/schema/version_2/invoice.xsd',
-            'typ' : 'http://www.stormware.cz/schema/version_2/type.xsd'
-        } 
         self.map = {
-                "sym-var"       : "//inv:symVar/text()",            # variabilni symbol
+                "sym-var"       : ".//inv:symVar/text()",            # variabilni symbol
 
-                "date"          : "//inv:date/text()",              # datum
-                "date-tax"      : "//inv:dateTax/text()",           # danitelne plneni
-                "date-due"      : "//inv:dateDue/text()",           # splatnost
+                "date"          : ".//inv:date/text()",              # datum
+                "date-tax"      : ".//inv:dateTax/text()",           # danitelne plneni
+                "date-due"      : ".//inv:dateDue/text()",           # splatnost
 
-                "addr-name"     : "//typ:address/typ:name/text()",
-                "addr-street"   : "//typ:address/typ:street/text()",
-                "addr-city"     : "//typ:address/typ:city/text()",
-                "addr-zip"      : "//typ:address/typ:zip/text()",
+                "addr-name"     : ".//typ:address/typ:name/text()",
+                "addr-street"   : ".//typ:address/typ:street/text()",
+                "addr-city"     : ".//typ:address/typ:city/text()",
+                "addr-zip"      : ".//typ:address/typ:zip/text()",
 
-                "ico"           : "//typ:address/typ:ico/text()",
-                "dic"           : "//typ:address/typ:dic/text()",
+                "ico"           : ".//typ:address/typ:ico/text()",
+                "dic"           : ".//typ:address/typ:dic/text()",
 
-                "sum"           : "//inv:invoiceSummary//typ:priceLowSum/text()",
+                "sum"           : ".//inv:invoiceSummary//typ:priceLowSum/text()",
 
                 "inv-items"     : {
-                    "__count__" : "count(//inv:invoiceItem)",
-                    "name"      : "//inv:invoiceItem[%d]/inv:text/text()",
-                    "quantity"  : "//inv:invoiceItem[%d]/inv:quantity/text()",
-                    "unit"      : "//inv:invoiceItem[%d]/inv:unit/text()",
-                    "priceUnit":  "//inv:invoiceItem[%d]/inv:homeCurrency/typ:unitPrice/text()",
-                    "price"     : "//inv:invoiceItem[%d]/inv:homeCurrency/typ:price/text()",
-                    "priceVAT"  : "//inv:invoiceItem[%d]/inv:homeCurrency/typ:priceVAT/text()",
-                    "rateVAT"   : "//inv:invoiceItem[%d]/inv:rateVAT/text()",                        # low/hight
-                    "payVAT"    : "//inv:invoiceItem[%d]/inv:payVAT/text()"
+                    "__count__" : "count(.//inv:invoiceItem)",
+                    "name"      : ".//inv:invoiceItem[%d]/inv:text/text()",
+                    "quantity"  : ".//inv:invoiceItem[%d]/inv:quantity/text()",
+                    "unit"      : ".//inv:invoiceItem[%d]/inv:unit/text()",
+                    "priceUnit":  ".//inv:invoiceItem[%d]/inv:homeCurrency/typ:unitPrice/text()",
+                    "price"     : ".//inv:invoiceItem[%d]/inv:homeCurrency/typ:price/text()",
+                    "priceVAT"  : ".//inv:invoiceItem[%d]/inv:homeCurrency/typ:priceVAT/text()",
+                    "rateVAT"   : ".//inv:invoiceItem[%d]/inv:rateVAT/text()",                        # low/hight
+                    "payVAT"    : ".//inv:invoiceItem[%d]/inv:payVAT/text()"
                 }
         }
 
-    def readXML(self, inv, filename):
-        try:
-            self.doc = etree.parse(filename)
-        except:
-            self.error('Failed to parse %s' % filename)
-
+    def readXML(self, inv, root):
+        self.doc = root
         self.readByMap(self.map, inv)
 
     def readByMap(self, m, inv):
@@ -62,7 +61,7 @@ class readerPohoda:
 
     def readSubMap(self, key, m, inv):
         path = m['__count__']
-        count = int(self.doc.xpath(path, namespaces=self.ns))
+        count = int(self.doc.xpath(path, namespaces=namespaces))
         if count is 0.0:
             return
         inv[key] = []
@@ -77,7 +76,7 @@ class readerPohoda:
         #print "KZAK>>> %s" % inv[key]
 
     def itemFromXML(self, key, path, inv):
-            x = self.doc.xpath(path, namespaces=self.ns)
+            x = self.doc.xpath(path, namespaces=namespaces)
             if len(x) == 0:
                 return
             if type(x[0]) in [etree._ElementStringResult, etree._ElementUnicodeResult]:
@@ -129,7 +128,7 @@ class writerFlexiBee:
         self.appendTextItem(parent, "ic", "ico", inv)
         self.appendTextItem(parent, "dic", "dic", inv)
 
-    def vatToNumber(self, inv, name):
+    def vatToSymbol(self, inv, name):
         return vat[inv[name]]
 
     def generateInvDataItems(self, parent, inv):
@@ -149,7 +148,7 @@ class writerFlexiBee:
             self.appendTextItem(pol, "sumZkl", "price", i)
             self.appendTextItem(pol, "sumDph", "priceVAT", i)
             if i.has_key("rateVAT"):
-                etree.SubElement(pol, "szbDph").text = self.vatToNumber(i, "rateVAT")
+                etree.SubElement(pol, "typSzbDphK").text = self.vatToSymbol(i, "rateVAT")
 
     def generateInvData(self, doc, inv):
         fak = etree.SubElement(doc, "faktura-vydana")
@@ -162,23 +161,15 @@ class writerFlexiBee:
         self.appendTextItem(fak, "datVyst", "date", inv)
         self.appendTextItem(fak, "datSplat", "date-due", inv)
         self.appendTextItem(fak, "duzpPuv", "date-tax", inv)
+        etree.SubElement(fak, "formaUhrK").text = "formaUhr.dobirka";
 
         self.generateAddress(fak, inv)
         self.generateInvDataItems(fak, inv)
 
-    def generateTree(self, inv):
-        doc = etree.Element("winstrom", version="1.0")
+    def writeXML(self, root):
         if self.useAddressBook:
-            self.generateAddressBook(doc, inv)
-        self.generateInvData(doc, inv)
-        return doc
-
-    def writeXML(self, inv, filename=None):
-        print etree.tostring(self.generateTree(inv),
-                    pretty_print=True,
-                    method='xml',
-                    xml_declaration=True,
-                    encoding="UTF-8")
+            self.generateAddressBook(root, inv)
+        self.generateInvData(root, inv)
 
 
 class Invoice:
@@ -241,24 +232,49 @@ class Invoice:
     def __unicode__(self):
         return unicode(repr(self.__dict__))
 
-    def readFromFile(self, filename):
-        self.reader.readXML(self, filename)
+    def readFromXML(self, root):
+        self.reader.readXML(self, root)
 
-    def writeToFile(self, filename=None):
-        self.writer.writeXML(self, filename)
+    def writeToXML(self, root):
+        self.writer.writeXML(root)
 
+
+
+def unpackPohoda(filename):
+    try:
+        doc = etree.parse(filename)
+    except:
+        self.error('Failed to parse %s' % filename)
+
+    return doc.xpath('//inv:invoice', namespaces=namespaces)
+
+def makeFlexiBeeTree():
+    return etree.Element("winstrom", version="1.0")
+
+def packFlexiBee(tree):
+     print etree.tostring(tree,
+                    pretty_print=True,
+                    method='xml',
+                    xml_declaration=True,
+                    encoding="UTF-8")
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print "usage: %s <filename>" % sys.argv[0]
         sys.exit(1)
-         
-    inv = Invoice(readerPohoda(),
-                  writerFlexiBee(ignoreZeroPrice=True,
+    
+    pohoda = unpackPohoda(sys.argv[1])
+    bee    = makeFlexiBeeTree()
+
+    for p in pohoda:
+        inv = Invoice(readerPohoda(),
+                      writerFlexiBee(ignoreZeroPrice=True,
                                  useAddressBook=False))
+        inv.readFromXML(p)
+        inv.writeToXML(bee)
+        del inv
 
-    inv.readFromFile(sys.argv[1])
-
-    inv.writeToFile()    
+    packFlexiBee(bee)
+    
 
