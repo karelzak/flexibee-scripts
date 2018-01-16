@@ -10,4 +10,4 @@ if [ -z $HESLO ] || [ -z $SOUBOR ]; then
 	exit 1
 fi
 
-curl -u ${HESLO} -k -L https://${DOMAIN}.flexibee.eu:5434/c/${FIRMA}/faktura-vydana.xml -T ${SOUBOR}"
+curl -u ${HESLO} -k -L https://${DOMAIN}.flexibee.eu:5434/c/${FIRMA}/faktura-vydana.xml -T ${SOUBOR}

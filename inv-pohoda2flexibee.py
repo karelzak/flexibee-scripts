@@ -1,7 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import sys, os, string, time, types
 from lxml import etree
+import urllib.request
+import urllib.parse
+
+username = ''
+password = ''
 
 vat = { 
         "high" : "typSzbDph.dphZakl",
@@ -21,6 +27,7 @@ class readerPohoda:
         self.map = {
                 "inv-type"      : ".//inv:invoiceType/text()",
                 "code"          : ".//typ:numberRequested/text()",
+                "order-num"     : ".//inv:numberOrder/text()",
 
                 "sym-var"       : ".//inv:symVar/text()",            # variabilni symbol
 
@@ -56,8 +63,8 @@ class readerPohoda:
         self.readByMap(self.map, inv)
 
     def readByMap(self, m, inv):
-        for key in m.keys():
-            if type(m[key]) is types.DictType:
+        for key in list(m.keys()):
+            if  isinstance(m[key], dict):
                 self.readSubMap(key, m[key], inv)
             else:
                 self.itemFromXML(key, m[key], inv)
@@ -70,13 +77,11 @@ class readerPohoda:
         inv[key] = []
         for i in range(1, count+1):
             subinv = {}
-            for k in m.keys():
+            for k in list(m.keys()):
                 if k is '__count__':
                     continue
                 self.itemFromXML(k, m[k] % i, subinv)
             inv[key].append(subinv)
-
-        #print "KZAK>>> %s" % inv[key]
 
     def itemFromXML(self, key, path, inv):
             x = self.doc.xpath(path, namespaces=namespaces)
@@ -95,7 +100,7 @@ class writerFlexiBee:
         self.ignoreZeroPrice = ignoreZeroPrice
 
     def appendTextItem(self, parent, name, itemname, inv):
-        if inv.has_key(itemname):
+        if itemname in inv:
             etree.SubElement(parent, name).text = inv[itemname]
 
     def generateAddress(self, parent, inv):
@@ -110,7 +115,7 @@ class writerFlexiBee:
         return vat[inv[name]]
 
     def isDobropis(self, inv):
-        if inv.has_key("inv-type") and inv["inv-type"] == "issuedCorrectiveTax":
+        if "inv-type" in inv and inv["inv-type"] == "issuedCorrectiveTax":
             return True
         return False
 
@@ -120,7 +125,7 @@ class writerFlexiBee:
         for i in inv["inv-items"]:
             if self.ignoreZeroPrice:
                 price = 0.0
-                if i.has_key("price"):
+                if "price" in i:
                     price = float(i["price"])
                 if price == 0.0:
                     continue
@@ -130,8 +135,28 @@ class writerFlexiBee:
             self.appendTextItem(pol, "cenaMj", "priceUnit", i) 
             self.appendTextItem(pol, "sumZkl", "price", i)
             self.appendTextItem(pol, "sumDph", "priceVAT", i)
-            if i.has_key("rateVAT"):
+            if "rateVAT" in i:
                 etree.SubElement(pol, "typSzbDphK").text = self.vatToSymbol(i, "rateVAT")
+
+    def orderToInvoiceCode(self, order):
+        if len(password) is 0 or len(username) is 0:
+            return ''
+        data = {}
+        data['detail'] = 'custom:kod'
+        data['xpath']  = '//kod/text()'
+        url_values = urllib.parse.urlencode(data)
+        url = 'https://zakova.flexibee.eu:5434'
+        url_path = "/c/test/faktura-vydana/(cisObj='%s').xml" % order
+        url_full = url + url_path + '?' + url_values
+
+        passman = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+        passman.add_password(None, url, username, password)
+        authhandler = urllib.request.HTTPBasicAuthHandler(passman)
+        opener = urllib.request.build_opener(authhandler)
+        urllib.request.install_opener(opener)
+
+        res = urllib.request.urlopen(url_full)
+        return res.read().decode('utf-8')
 
     def generateInvData(self, doc, inv):
         fak = etree.SubElement(doc, "faktura-vydana")
@@ -140,24 +165,33 @@ class writerFlexiBee:
 
         if self.isDobropis(inv):
             etree.SubElement(fak, "id").text = "code:DOB%s" % code
-            dob = etree.SubElement(fak, "vytvor-vazbu-dobropis")
-            etree.SubElement(dob, "dobropisovanyDokl").text = "code:FAK%s" % code
+            fcode = self.orderToInvoiceCode(inv["order-num"])
+            if len(fcode) > 0:
+                print("Vazba: %s -> %s" % (code, fcode), file=sys.stderr)
+                dob = etree.SubElement(fak, "vytvor-vazbu-dobropis")
+                etree.SubElement(dob, "dobropisovanyDokl").text = "code:%s" % fcode
+            else:
+                print("Dluhopis %s nema vazbu" % code, file=sys.stderr)
         else:
             etree.SubElement(fak, "id").text = "code:FAK%s" % code
 
         if len(self.last_addr_id):
             etree.SubElement(fak, "firma").text = self.last_addr_id
+
+        etree.SubElement(fak, "typUcOp").text = "code:DP1-ZBOŽÍ"
         etree.SubElement(fak, "typDokl").text = "code:FAKTURA"
+        etree.SubElement(fak, "formaUhradyCis").text = "code:DOBIRKA"
+        etree.SubElement(fak, "clenKonVykDph").text = "code:A.4-5.AUTO"
+        etree.SubElement(fak, "stavUhrK").text = "stavUhr.uhrazenoRucne"
 
         self.appendTextItem(fak, "varSym", "sym-var", inv)
         self.appendTextItem(fak, "datVyst", "date", inv)
         self.appendTextItem(fak, "datSplat", "date-due", inv)
         self.appendTextItem(fak, "duzpPuv", "date-tax", inv)
-        etree.SubElement(fak, "formaUhrK").text = "formaUhr.dobirka";
-
+        self.appendTextItem(fak, "cisObj", "order-num", inv)
+       
         self.generateAddress(fak, inv)
         self.generateInvDataItems(fak, inv)
-
 
 
     def writeXML(self, root):
@@ -172,7 +206,7 @@ class Invoice:
 
     def __str__(self):
         res = ""
-        for key in self.items.keys():
+        for key in list(self.items.keys()):
             res += "%s: %s\n" % (key, self.items[key].encode('ascii', 'replace'))
         return res
 
@@ -244,16 +278,13 @@ def makeFlexiBeeTree():
     return etree.Element("winstrom", version="1.0")
 
 def packFlexiBee(tree):
-     print etree.tostring(tree,
-                    pretty_print=True,
-                    method='xml',
-                    xml_declaration=True,
-                    encoding="UTF-8")
+    print( "<?xml version='1.0' encoding='utf-8'?>")
+    print( etree.tounicode(tree, method='xml', pretty_print=True))
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print "usage: %s <filename>" % sys.argv[0]
+        print("usage: %s <filename>" % sys.argv[0])
         sys.exit(1)
     
     pohoda = unpackPohoda(sys.argv[1])
