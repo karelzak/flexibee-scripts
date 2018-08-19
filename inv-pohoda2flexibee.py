@@ -140,22 +140,29 @@ class writerFlexiBee:
 
     def orderToInvoiceCode(self, order):
         if len(password) is 0 or len(username) is 0:
+            print(" no password", file=sys.stderr)
             return ''
         data = {}
         data['detail'] = 'custom:kod'
         data['xpath']  = '//kod/text()'
         url_values = urllib.parse.urlencode(data)
         url = 'https://zakova.flexibee.eu:5434'
-        url_path = "/c/test/faktura-vydana/(cisObj='%s').xml" % order
-        url_full = url + url_path + '?' + url_values
+        url_filter = "%28cisObj%3D%27" + order + "%27%20and%20typDokl%3D%27code%3AFAKTURA-DOB%C3%8DRKA%27%29.xml"
+        url_path = "/c/radka_sekyrova/faktura-vydana/"
+        url_full = url + url_path + url_filter + '?' + url_values
 
-        passman = urllib.request.HTTPPasswordMgrWithDefaultRealm()
-        passman.add_password(None, url, username, password)
-        authhandler = urllib.request.HTTPBasicAuthHandler(passman)
-        opener = urllib.request.build_opener(authhandler)
-        urllib.request.install_opener(opener)
+        #print("KZAK>>> %s" % url_full, file=sys.stderr)
 
-        res = urllib.request.urlopen(url_full)
+        try:
+            passman = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+            passman.add_password(None, url, username, password)
+            authhandler = urllib.request.HTTPBasicAuthHandler(passman)
+            opener = urllib.request.build_opener(authhandler)
+            urllib.request.install_opener(opener)
+            res = urllib.request.urlopen(url_full)
+        except:
+            return ''
+
         return res.read().decode('utf-8')
 
     def generateInvData(self, doc, inv):
@@ -164,25 +171,27 @@ class writerFlexiBee:
         code = inv["code"]
 
         if self.isDobropis(inv):
-            etree.SubElement(fak, "id").text = "code:DOB%s" % code
+            etree.SubElement(fak, "id").text = "code:%s" % code
+            etree.SubElement(fak, "typDokl").text = "code:DOBROPIS-DOBÍRKA"
             fcode = self.orderToInvoiceCode(inv["order-num"])
             if len(fcode) > 0:
                 print("Vazba: %s -> %s" % (code, fcode), file=sys.stderr)
                 dob = etree.SubElement(fak, "vytvor-vazbu-dobropis")
                 etree.SubElement(dob, "dobropisovanyDokl").text = "code:%s" % fcode
             else:
-                print("Dluhopis %s nema vazbu" % code, file=sys.stderr)
+                print("Dobropis %s nema vazbu (objednavka=%s)" % (code, inv["order-num"]), file=sys.stderr)
         else:
-            etree.SubElement(fak, "id").text = "code:FAK%s" % code
+            etree.SubElement(fak, "id").text = "code:%s" % code
+            etree.SubElement(fak, "typDokl").text = "code:FAKTURA-DOBÍRKA"
 
         if len(self.last_addr_id):
             etree.SubElement(fak, "firma").text = self.last_addr_id
 
         etree.SubElement(fak, "typUcOp").text = "code:DP1-ZBOŽÍ"
-        etree.SubElement(fak, "typDokl").text = "code:FAKTURA"
+        etree.SubElement(fak, "cinnost").text = "code:PRODEJ-ZBOŽÍ"
         etree.SubElement(fak, "formaUhradyCis").text = "code:DOBIRKA"
         etree.SubElement(fak, "clenKonVykDph").text = "code:A.4-5.AUTO"
-        etree.SubElement(fak, "stavUhrK").text = "stavUhr.uhrazenoRucne"
+        #etree.SubElement(fak, "stavUhrK").text = "stavUhr.uhrazenoRucne"
 
         self.appendTextItem(fak, "varSym", "sym-var", inv)
         self.appendTextItem(fak, "datVyst", "date", inv)
