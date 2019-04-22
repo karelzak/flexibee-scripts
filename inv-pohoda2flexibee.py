@@ -94,10 +94,12 @@ class readerPohoda:
 
 
 class writerFlexiBee:
-    def __init__(self, ignoreZeroPrice=True):
+    def __init__(self, ignoreZeroPrice=True, codePrefix='', typePostfix=''):
         self.map = {}
         self.last_addr_id = ''
         self.ignoreZeroPrice = ignoreZeroPrice
+        self.codePrefix = codePrefix
+        self.typePostfix = typePostfix
 
     def appendTextItem(self, parent, name, itemname, inv):
         if itemname in inv:
@@ -171,7 +173,7 @@ class writerFlexiBee:
         code = inv["code"]
 
         if self.isDobropis(inv):
-            etree.SubElement(fak, "id").text = "code:%s" % code
+            etree.SubElement(fak, "id").text = "code:%s%s" % (self.codePrefix, code)
             etree.SubElement(fak, "typDokl").text = "code:DOBROPIS-DOBÍRKA"
             fcode = self.orderToInvoiceCode(inv["order-num"])
             if len(fcode) > 0:
@@ -181,8 +183,8 @@ class writerFlexiBee:
             else:
                 print("Dobropis %s nema vazbu (objednavka=%s)" % (code, inv["order-num"]), file=sys.stderr)
         else:
-            etree.SubElement(fak, "id").text = "code:%s" % code
-            etree.SubElement(fak, "typDokl").text = "code:FAKTURA-DOBÍRKA"
+            etree.SubElement(fak, "id").text = "code:%s%s" % (self.codePrefix, code)
+            etree.SubElement(fak, "typDokl").text = "code:FAKTURA-DOBÍRKA%s" % self.typePostfix
 
         if len(self.last_addr_id):
             etree.SubElement(fak, "firma").text = self.last_addr_id
@@ -293,7 +295,7 @@ def packFlexiBee(tree):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: %s <filename>" % sys.argv[0])
+        print("usage: %s <filename> <codePrefix> <typePostfix>" % sys.argv[0])
         sys.exit(1)
     
     pohoda = unpackPohoda(sys.argv[1])
@@ -301,7 +303,7 @@ if __name__ == "__main__":
 
     for p in pohoda:
         inv = Invoice(readerPohoda(),
-                      writerFlexiBee(ignoreZeroPrice=True))
+                      writerFlexiBee(ignoreZeroPrice=True, codePrefix=sys.argv[2], typePostfix=sys.argv[3]))
         inv.readFromXML(p)
         inv.writeToXML(bee)
         del inv
