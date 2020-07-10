@@ -168,10 +168,12 @@ def packFlexiBee(tree):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: %s <filename>" % sys.argv[0])
+        print("usage: %s <user> <pwd> <filename>" % sys.argv[0])
         sys.exit(1)
     
-    bank = unpackBank(sys.argv[1])
+    username = sys.argv[1]
+    password = sys.argv[2]
+    bank = unpackBank(sys.argv[3])
     bee  = makeFlexiBeeTree()
     i = 1
 
