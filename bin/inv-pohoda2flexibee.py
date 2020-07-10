@@ -204,8 +204,7 @@ class writerFlexiBee:
         self.generateAddress(fak, inv)
         self.generateInvDataItems(fak, inv)
 
-
-    def writeXML(self, root):
+    def writeXML(self, inv, root):
         self.generateInvData(root, inv)
 
 
@@ -273,7 +272,7 @@ class Invoice:
         self.reader.readXML(self, root)
 
     def writeToXML(self, root):
-        self.writer.writeXML(root)
+        self.writer.writeXML(self, root)
 
 
 
