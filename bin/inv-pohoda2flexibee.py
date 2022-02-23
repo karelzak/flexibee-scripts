@@ -72,13 +72,13 @@ class readerPohoda:
     def readSubMap(self, key, m, inv):
         path = m['__count__']
         count = int(self.doc.xpath(path, namespaces=namespaces))
-        if count is 0.0:
+        if count == 0.0:
             return
         inv[key] = []
         for i in range(1, count+1):
             subinv = {}
             for k in list(m.keys()):
-                if k is '__count__':
+                if k == '__count__':
                     continue
                 self.itemFromXML(k, m[k] % i, subinv)
             inv[key].append(subinv)
@@ -113,7 +113,10 @@ class writerFlexiBee:
         self.appendTextItem(parent, "ic", "ico", inv)
         self.appendTextItem(parent, "dic", "dic", inv)
 
-    def vatToSymbol(self, inv, name):
+    def vatToSymbol(self, inv, name, code):
+        if inv[name] == "none": 
+            print("Unspecified rateVAT; code: %s\nwho: %s" % (code, inv), file=sys.stderr)
+            sys.exit(1)
         return vat[inv[name]]
 
     def isDobropis(self, inv):
@@ -121,7 +124,7 @@ class writerFlexiBee:
             return True
         return False
 
-    def generateInvDataItems(self, parent, inv):
+    def generateInvDataItems(self, parent, inv, code):
         polRoot = etree.SubElement(parent, "polozkyFaktury")
     
         for i in inv["inv-items"]:
@@ -138,10 +141,10 @@ class writerFlexiBee:
             self.appendTextItem(pol, "sumZkl", "price", i)
             self.appendTextItem(pol, "sumDph", "priceVAT", i)
             if "rateVAT" in i:
-                etree.SubElement(pol, "typSzbDphK").text = self.vatToSymbol(i, "rateVAT")
+                etree.SubElement(pol, "typSzbDphK").text = self.vatToSymbol(i, "rateVAT", code)
 
     def orderToInvoiceCode(self, order):
-        if len(password) is 0 or len(username) is 0:
+        if len(password) == 0 or len(username) == 0:
             print(" no password", file=sys.stderr)
             return ''
         data = {}
@@ -202,7 +205,7 @@ class writerFlexiBee:
         self.appendTextItem(fak, "cisObj", "order-num", inv)
        
         self.generateAddress(fak, inv)
-        self.generateInvDataItems(fak, inv)
+        self.generateInvDataItems(fak, inv, code)
 
     def writeXML(self, inv, root):
         self.generateInvData(root, inv)
