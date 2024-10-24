@@ -74,7 +74,7 @@ class Sparovani:
 
         for x in ('R','E'):
             code = "%s%s" % (x, self["var"])
-            url_filter = "(kod='" + code + "').xml"
+            url_filter = "(id='code:" + code + "').xml"
             url_full = url + url_path + url_filter + '?' + url_values
             #print("KZAK>>> %s" % url_full, file=sys.stderr)
             try:
