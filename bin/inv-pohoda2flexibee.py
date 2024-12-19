@@ -87,10 +87,15 @@ class readerPohoda:
             x = self.doc.xpath(path, namespaces=namespaces)
             if len(x) == 0:
                 return
-            if type(x[0]) in [etree._ElementStringResult, etree._ElementUnicodeResult]:
+            if isinstance(x[0], str):
                 inv[key] = x[0]  # text
             else:
                 inv[key] = x     # list or object
+
+#            if type(x[0]) in [etree._ElementStringResult, etree._ElementUnicodeResult]:
+#               inv[key] = x[0]  # text
+#            else:
+#                inv[key] = x     # list or object
 
 
 class writerFlexiBee:
